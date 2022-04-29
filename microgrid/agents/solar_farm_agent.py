@@ -6,6 +6,7 @@ import pulp
 class SolarFarmAgent:
     def __init__(self, env: SolarFarmEnv):
         self.env = env
+        self.nb_pdt = 96
 
     def take_decision(self,
                       state,

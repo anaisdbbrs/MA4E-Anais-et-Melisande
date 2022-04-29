@@ -132,13 +132,23 @@ class Manager:
         self.update_reward(now, outputs)
         return outputs
 
+
     def has_converged(self, agents_data):
         # TODO: check if converged
-        return False
+        current_consumptions = np.array([a['consumption'] for a in agents_data.values()]).sum(axis=0).squeeze()
+        if self.previous_consumptions is None:
+            self.previous_consumptions = current_consumptions
+            return False
+        res = np.linalg.norm(self.previous_consumptions - current_consumptions) < self.eps
+        self.previous_consumptions = current_consumptions
+        return res
 
     def update_signal(self, signal, agents_data):
         # TODO: update signal based on previous signal and agents_data
-        return signal + np.random.randn(self.nb_pdt) * 0.1
+        current_consumptions = np.array([a['consumption'] for a in agents_data.values()]).sum(axis=0).squeeze()
+        lpv = agents_data["ferme"]["state"]["pv_previsions"]
+        return (current_consumptions-lpv)/lpv
+
 
     def update_reward(self, now: datetime.datetime, agents_data: dict):
         # TODO: update rewards based on previous rewards and agents_data
@@ -150,7 +160,7 @@ class Manager:
         return agents_data
 
     def adapt_signal_for_next_timestep(self, signal):
-        return signal
+        return np.roll(signal, -1)
 
     def plots(self):
         plt.figure()
