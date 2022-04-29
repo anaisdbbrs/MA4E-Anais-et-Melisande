@@ -30,7 +30,7 @@ class DataCenterEnv(gym.Env):
         self.Tcom = self.data_center.Tcom
         self.Tr = self.data_center.Tr
         self.rho = self.data_center.rho
-        self.COP_HP = self.Tcom/(self.Tcom + self.Tr) * self.rho
+        self.COP_HP = self.Tcom/(self.Tcom - self.Tr) * self.rho
         self.EER = self.data_center.EER
         self.COP_CS = self.EER + 1
         self.max_transfert = self.data_center.max_transfert

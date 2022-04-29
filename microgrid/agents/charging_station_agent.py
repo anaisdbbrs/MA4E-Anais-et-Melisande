@@ -7,6 +7,7 @@ from collections import defaultdict
 class ChargingStationAgent:
     def __init__(self, env: ChargingStationEnv):
         self.env = env
+        self.nb_pdt = 96
 
     def take_decision(self,
                       state,
@@ -21,7 +22,7 @@ class ChargingStationAgent:
         date_time = state.get("datetime")
         H = datetime.timedelta(hours=1)
 
-        lp = pulp.LpProblem("charging station", pulp.LpMinimize)
+        lp = pulp.LpProblem("charging_station", pulp.LpMinimize)
 
         l_charge = defaultdict(dict)
         l_decharge = defaultdict(dict)

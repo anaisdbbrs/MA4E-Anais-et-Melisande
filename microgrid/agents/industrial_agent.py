@@ -6,6 +6,7 @@ import pulp
 class IndustrialAgent:
     def __init__(self, env: IndustrialEnv):
         self.env = env
+        self.nb_pdt = 96
 
     def take_decision(self,
                       state,
@@ -18,7 +19,7 @@ class IndustrialAgent:
         date_time = state.get("datetime")
         H = datetime.timedelta(hours=1)
 
-        lp = pulp.LpProblem("solar", pulp.LpMinimize)
+        lp = pulp.LpProblem("industrial", pulp.LpMinimize)
 
         l_charge = {}
         l_decharge = {}
