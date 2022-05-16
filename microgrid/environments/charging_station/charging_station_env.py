@@ -54,6 +54,8 @@ class ChargingStationEnv(gym.Env):
             effective_powers[:, 0] = effective_powers[:, 0] * (self.pmax_site / total_effective_powers)
         else:
             penalties.append(BatteryState.OK)
+        for ev in self.evs:
+            ev.roulage(self.now, self.delta_t)
         self.now += self.delta_t
         return self._step_common(effective_powers, penalties)
 

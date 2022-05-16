@@ -105,17 +105,25 @@ if __name__ == "__main__":
     N = time_horizon // delta_t
     evs_config = [
         {
-            'capacity': 50,
+            'capacity': 40,
+            'pmax': 22,
+        },
+        {
+            'capacity': 40,
+            'pmax': 22,
+        },
+        {
+            'capacity': 40,
             'pmax': 3,
         },
         {
-            'capacity': 50,
-            'pmax': 22,
-        }
+            'capacity': 40,
+            'pmax': 3,
+        },
     ]
     station_config = {
         'pmax': 40,
-        'evs_config': evs_config
+        'evs': evs_config
     }
     env = ChargingStationEnv(station_config=station_config, nb_pdt=N)
     agent = ChargingStationAgent(env)

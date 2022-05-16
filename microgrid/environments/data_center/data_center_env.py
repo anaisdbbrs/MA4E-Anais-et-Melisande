@@ -19,6 +19,7 @@ class DataCenterEnv(gym.Env):
                 'datetime': spaces.Space[datetime.datetime]((), np.datetime64, seed),
                 'manager_signal': spaces.Box(low=-np.inf, high=np.inf, shape=(nb_pdt,)),
                 'consumption_prevision': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
+                'hotwater_price_prevision': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
             }
         )
         # the action is alpha_t
@@ -50,6 +51,7 @@ class DataCenterEnv(gym.Env):
             'datetime': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'consumption_prevision': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'hotwater_price_prevision': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         reward = 0 if penalties == 0 else -1e5
         return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_alpha, 'datetime': self.now}
@@ -62,6 +64,7 @@ class DataCenterEnv(gym.Env):
             'datetime': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'consumption_prevision': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'hotwater_price_prevision': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         return state
 

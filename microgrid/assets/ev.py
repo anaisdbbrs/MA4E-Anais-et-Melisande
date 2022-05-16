@@ -51,6 +51,13 @@ class EV:
     def charge(self, power, delta_t=datetime.timedelta(minutes=30)):
         return self.battery.charge(power, delta_t)
 
+    def roulage(self, when: datetime.datetime, delta_t=datetime.timedelta(minutes=30)):
+        is_unplugged = not self.get_is_plugged(when, when)
+        will_be_plugged = self.get_is_plugged(when + delta_t, when)
+        if is_unplugged and will_be_plugged:
+            self.battery.soc -= 4
+        return self.battery.soc
+
     def get_soc(self, when: datetime.datetime):
         if self.get_is_plugged(when, when):
             return self.battery.soc

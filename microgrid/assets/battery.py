@@ -15,7 +15,7 @@ class BatteryState(enum.IntEnum):
 
 
 class Battery:
-    def __init__(self, capacity=100, pmax=100, pmin=None, efficiency=0.95, initial_soc=lambda: uniform(0, 1)):
+    def __init__(self, capacity=100, pmax=100, pmin=None, efficiency=0.95, initial_soc=lambda: uniform(0, 0)):
         self.capacity = capacity
         self.pmax = pmax
         self.pmin = pmin if pmin is not None else -pmax

@@ -21,9 +21,9 @@ class Building:
     def get_power(self, when: datetime.datetime, start: datetime.datetime):
         pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30) + 1
         scenario = self.scenario
-        if pdt == 49:
-            scenario = scenario % 31 + 1
-            pdt = pdt % 49 + 1
+        if pdt == 47:
+            scenario = scenario % 30 + 1
+            pdt = pdt % 47 + 1
         __a = self.data.loc[self.data['site_id'] == self.site]
         __b = __a.loc[__a['scenario'] == scenario]
         __c = __b.loc[__b['time_slot'] == pdt, ['cons (kW)']]
@@ -36,7 +36,7 @@ class Building:
             res = np.array(list(map(lambda x: self.get_power(x, start), datetimes)))
             pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
             if pdt == 24*2-1:
-                self.scenario = self.scenario % 31 + 1
+                self.scenario = self.scenario % 30 + 1
         return res
 
 

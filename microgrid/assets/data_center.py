@@ -19,6 +19,7 @@ class DataCenter:
                  max_transfert=10,
                  ):
         self.scenario = scenario
+        self.hotwater_scenario = 1
         self.Tcom = Tcom + 273.15
         self.Tr = Tr + 273.15
         self.rho = rho
@@ -27,6 +28,7 @@ class DataCenter:
         self.COP_CS = self.EER + 1
         self.max_transfert = max_transfert
         self.data = pd.read_csv(os.path.join(os.path.dirname(__file__), f'scenarios/data_center/data.csv'), delimiter=';')
+        self.prices = pd.read_csv(os.path.join(os.path.dirname(__file__), f'scenarios/data_center/hotwater_prices.csv'), delimiter=';')
 
     def reset(self):
         self.scenario = randint(1, 10)
@@ -41,11 +43,31 @@ class DataCenter:
         __b = __a.loc[__a['time_slot'] == pdt, ['cons (kW)']]
         return __b.values[0][0]
 
+    def get_price(self, when: datetime.datetime, start: datetime.datetime):
+        pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30) + 1
+        scenario = self.hotwater_scenario
+        if pdt % 337 == 0:
+            scenario = scenario % 1 + 1
+            pdt = pdt % 337 + 1
+        __a = self.data.loc[self.data['scenario'] == scenario]
+        __b = __a.loc[__a['time_slot'] == pdt, ['cons (kW)']]
+        return __b.values[0][0]
+
     def get_conso_prevision(self, datetimes: [datetime.datetime]):
         res = []
         if len(datetimes) > 0:
             start = datetimes[0]
             res = np.array([self.get_power(x, start) for x in datetimes])
+            pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
+            if pdt == 24 * 2 - 1:
+                self.scenario = self.scenario % 10 + 1
+        return res
+
+    def get_prices_prevision(self, datetimes: [datetime.datetime]):
+        res = []
+        if len(datetimes) > 0:
+            start = datetimes[0]
+            res = np.array([self.get_price(x, start) for x in datetimes])
             pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
             if pdt == 24 * 2 - 1:
                 self.scenario = self.scenario % 10 + 1
