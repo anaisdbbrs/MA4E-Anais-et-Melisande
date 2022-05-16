@@ -6,7 +6,7 @@ import pulp
 class IndustrialAgent:
     def __init__(self, env: IndustrialEnv):
         self.env = env
-        self.nb_pdt = 96
+        self.nb_pdt = env.nb_pdt
 
     def take_decision(self,
                       state,
@@ -18,6 +18,9 @@ class IndustrialAgent:
         manager_signal = state.get("manager_signal")
         date_time = state.get("datetime")
         H = datetime.timedelta(hours=1)
+        pmax = self.env.battery.pmax
+        efficiency = self.env.battery.efficiency
+        capacity = self.env.battery.capacity
 
         lp = pulp.LpProblem("industrial", pulp.LpMinimize)
 
@@ -29,30 +32,30 @@ class IndustrialAgent:
 
             # Definition des variables
             var_name = "l_charge" + str(t)
-            l_charge[t] = pulp.LpVariable(var_name, 0, battery_config.get("pmax"))
+            l_charge[t] = pulp.LpVariable(var_name, 0, pmax)
             var_name = "l_decharge" + str(t)
-            l_decharge[t] = pulp.LpVariable(var_name, -battery_config.get("pmax"), 0)
+            l_decharge[t] = pulp.LpVariable(var_name, -pmax, 0)
             var_name2 = "alpha" + str(t)
             alpha[t] = pulp.LpVariable(var_name2, cat="Binary")
 
             # Defintion des contraintes
             if t == 0:
-                a[t] = 0 + (battery_config.get("efficiency") * l_charge[t] + 1 / (battery_config.get("efficiency")) *
+                a[t] = 0 + (efficiency * l_charge[t] + 1 / efficiency *
                             l_decharge[t]) * (delta_t / H)
             else:
                 a[t] = a[t - 1] + (
-                            battery_config.get("efficiency") * l_charge[t] + 1 / (battery_config.get("efficiency")) *
+                            efficiency * l_charge[t] + 1 / efficiency *
                             l_decharge[t]) * (delta_t / H)
 
             const_name = "a<=C" + str(t)
-            lp += a[t] <= battery_config.get("capacity"), const_name
+            lp += a[t] <= capacity, const_name
             const_name = "a>=0" + str(t)
             lp += a[t] >= 0, const_name
 
             const_name = "lcharge<= pmax*alpha" + str(t)
-            lp += l_charge[t] <= battery_config.get("pmax") * alpha[t], const_name
+            lp += l_charge[t] <= pmax * alpha[t], const_name
             const_name = "ldecharge >= -pmax(1-alpha)" + str(t)
-            lp += l_decharge[t] >= -battery_config.get("pmax") * (1 - alpha[t]), const_name
+            lp += l_decharge[t] >= -pmax * (1 - alpha[t]), const_name
 
             # Creation de la fonction objectif
         lp.setObjective(pulp.lpSum(

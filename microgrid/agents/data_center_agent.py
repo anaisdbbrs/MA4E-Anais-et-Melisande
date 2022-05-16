@@ -6,7 +6,7 @@ import numpy as np
 class DataCenterAgent:
     def __init__(self, env: DataCenterEnv):
         self.env = env
-        self.nb_pdt = 48
+        self.nb_pdt = env.nb_pdt
 
     def take_decision(self,
                       state,

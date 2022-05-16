@@ -7,7 +7,7 @@ from collections import defaultdict
 class ChargingStationAgent:
     def __init__(self, env: ChargingStationEnv):
         self.env = env
-        self.nb_pdt = 96
+        self.nb_pdt = env.nb_pdt
 
     def take_decision(self,
                       state,
@@ -22,6 +22,7 @@ class ChargingStationAgent:
         date_time = state.get("datetime")
         H = datetime.timedelta(hours=1)
 
+
         lp = pulp.LpProblem("charging_station", pulp.LpMinimize)
 
         l_charge = defaultdict(dict)
@@ -33,16 +34,34 @@ class ChargingStationAgent:
         tarr = {}
 
         plugged_prevision_diff = plugged_prevision.copy()
-        for k in range(self.env.nb_evs):
-            diff = np.diff(plugged_prevision_diff[k])
-            for t in range(self.nb_pdt - 1):
-                if diff[t] == -1:
-                    tdep[k] = t + 1
-                if diff[t] == 1:
-                    tarr[k] = t + 1
 
-        for t in range(self.nb_pdt):
-            for k in range(self.env.nb_evs):
+        diff = []
+        for k in range(self.env.nb_evs):
+            print(plugged_prevision_diff[k])
+            diff.append([0] + np.diff(plugged_prevision_diff[k]).tolist())
+
+
+            #Initialisation de IS_PLUGGED
+            if plugged_prevision[k][0] == 1:
+                IS_PLUGGED = True
+            else:
+                IS_PLUGGED = False
+        print(tdep)
+        print(tarr)
+
+        for k in range(self.env.nb_evs):
+            tdep = None
+            tarr = None
+            soc_ = soc[k]
+            for t in (range(self.nb_pdt)):
+                old_is_plugged = IS_PLUGGED
+
+                if diff[k][t] == 1:
+                    IS_PLUGGED = True
+                elif diff[k][t] == -1 :
+                    IS_PLUGGED = False
+
+
                 # Definition des variables
                 var_name = "l_charge" + str(t) + str(k)
                 l_charge[k][t] = pulp.LpVariable(var_name, 0, evs_config[k].get("pmax"))
@@ -52,35 +71,57 @@ class ChargingStationAgent:
                 alpha[k][t] = pulp.LpVariable(var_name2, cat="Binary")
 
                 # Defintion des contraintes
-                if t == 0:
-                    a[k][t] = 0 + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
-                        self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (delta_t / H)
-                elif t <= tdep[k] or t >= tarr[k]:
-                    a[k][t] = a[k][t - 1] + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
-                        self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (delta_t / H)
+                """bool1 = tdep[k]<=tarr[k] and (t < tdep[k] or t >= tarr[k])
+                print(bool1)
+                bool2 = tdep[k]>tarr[k] and (t>=tarr[k] and t<tdep[k])
+                print(bool2)"""
 
-                const_name = "a<=C" + str(t) + str(k)
-                lp += a[k][t] <= self.env.evs[k].battery.capacity, const_name
-                const_name = "a>=0" + str(t) + str(k)
-                lp += a[k][t] >= 0, const_name
+                #if t == 0:
+                    #a[k][t] = 0 + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
+                        #self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (delta_t / H)
+                    #soc_ = soc
+
+                if IS_PLUGGED :
+                    soc_ = soc_ + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
+                        self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (delta_t / H)
+                    const_name = "a<=C" + str(t) + str(k)
+                    lp += soc_ <= self.env.evs[k].battery.capacity, const_name
+                    const_name = "a>=0" + str(t) + str(k)
+                    lp += soc_ >= 0, const_name
+
 
                 const_name = "lcharge<=pmax*alpha" + str(t) + str(k)
                 lp += l_charge[k][t] <= self.env.evs[k].battery.pmax * alpha[k][t], const_name
                 const_name = "ldecharge>=-pmax(1-alpha)" + str(t) + str(k)
                 lp += l_decharge[k][t] >= -self.env.evs[k].battery.pmax * (1 - alpha[k][t]), const_name
 
+                is_gone = True
+
+                if old_is_plugged != IS_PLUGGED and not IS_PLUGGED and is_gone :
+                    tdep = t
+                    const_name = "charge_depart-25%" + str(k)
+                    lp += 0.25 * self.env.evs[k].battery.pmax <= l_charge[k][tdep] + l_decharge[k][tdep], const_name
+                    soc_tdep = soc_
+                    is_gone = False
+
+                if old_is_plugged != IS_PLUGGED and IS_PLUGGED:
+                    if tdep is not None :
+                        tarr = t
+                        const_name = "retourdelavoiture" + str(k)
+                        lp += soc_ == soc_tdep - 4, const_name
+                    else:  # Cas particulier, y en a t'il d'autres?
+                        if tarr is not None:
+                            const_name = "retourdelavoiture" + str(k)
+                            lp += soc_ == soc - 4, const_name
+
+
+        for t in (range(self.nb_pdt)):
             const_name = "total_l4<=40" + str(t) + str(k)
             lp += pulp.lpSum([l_charge[k][t] + l_decharge[k][t] for k in range(self.env.nb_evs)]) <= 40, const_name
 
             const_name = "total_l4>=-40" + str(t) + str(k)
             lp += pulp.lpSum([l_charge[k][t] + l_decharge[k][t] for k in range(self.env.nb_evs)]) >= -40, const_name
 
-        for k in range(self.env.nb_evs):
-            const_name = "charge_depart-25%" + str(k)
-            lp += 0.25 * self.env.evs[k].battery.pmax <= l_charge[k][tdep[k]] + l_decharge[k][tdep[k]], const_name
-
-            const_name = "retourdelavoiture" + str(k)
-            lp += a[k][tarr[k]] == a[k][tdep[k]] - 4, const_name
 
             # Creation de la fonction objectif
         lp.setObjective(pulp.lpSum(
