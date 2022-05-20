@@ -29,7 +29,7 @@ class DataCenterAgent:
 
 
         H = datetime.timedelta(hours=1)
-        deltat = delta_t/H
+        deltat = self.env.delta_t/H
         li = state.get("consumption_prevision")
 
         lp = pulp.LpProblem("data_center", pulp.LpMinimize)
@@ -50,7 +50,7 @@ class DataCenterAgent:
 
         lp.solve()
 
-        return np.array(alpha.values())
+        return np.array([alpha[t].value() for t in range(self.nb_pdt)])
 
 
 
