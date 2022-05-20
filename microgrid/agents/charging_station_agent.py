@@ -64,9 +64,9 @@ class ChargingStationAgent:
 
                 # Definition des variables
                 var_name = "l_charge" + str(t) + str(k)
-                l_charge[k][t] = pulp.LpVariable(var_name, 0, evs_config[k].get("pmax"))
+                l_charge[k][t] = pulp.LpVariable(var_name, 0, self.env.evs_config[k].get("pmax"))
                 var_name = "l_decharge" + str(t) + str(k)
-                l_decharge[k][t] = pulp.LpVariable(var_name, -evs_config[k].get("pmax"), 0)
+                l_decharge[k][t] = pulp.LpVariable(var_name, -self.env.evs_config[k].get("pmax"), 0)
                 var_name2 = "alpha" + str(t) + str(k)
                 alpha[k][t] = pulp.LpVariable(var_name2, cat="Binary")
 
@@ -83,7 +83,7 @@ class ChargingStationAgent:
 
                 if IS_PLUGGED :
                     soc_ = soc_ + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
-                        self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (delta_t / H)
+                        self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (self.env.delta_t / H)
                     const_name = "a<=C" + str(t) + str(k)
                     lp += soc_ <= self.env.evs[k].battery.capacity, const_name
                     const_name = "a>=0" + str(t) + str(k)
@@ -125,7 +125,7 @@ class ChargingStationAgent:
 
             # Creation de la fonction objectif
         lp.setObjective(pulp.lpSum(
-            [(l_charge[k][t] + l_decharge[k][t]) * manager_signal[t] * (delta_t / H) for k in range(self.env.nb_evs) for
+            [(l_charge[k][t] + l_decharge[k][t]) * manager_signal[t] * (self.env.delta_t / H) for k in range(self.env.nb_evs) for
              t in range(self.nb_pdt)]))
 
         lp.solve()

@@ -49,11 +49,11 @@ class SolarFarmAgent:
             # Defintion des contraintes
             if t == 0:
                 a[t] = 0 + (self.env.battery.efficiency * l_charge[t] + 1 / (efficiency) *
-                            l_decharge[t]) * (delta_t / H)
+                            l_decharge[t]) * (self.env.delta_t / H)
             else:
                 a[t] = a[t - 1] + (
                             efficiency * l_charge[t] + 1 / (efficiency) *
-                            l_decharge[t]) * (delta_t / H)
+                            l_decharge[t]) * (self.env.delta_t / H)
 
             const_name = "a<=C" + str(t)
             lp += a[t] <= capacity, const_name
@@ -67,7 +67,7 @@ class SolarFarmAgent:
 
             # Creation de la fonction objectif
         lp.setObjective(pulp.lpSum(
-            [(pv_prevision[t] + l_charge[t] + l_decharge[t]) * manager_signal[t] * (delta_t / H) for t in
+            [(pv_prevision[t] + l_charge[t] + l_decharge[t]) * manager_signal[t] * (self.env.delta_t / H) for t in
              range(self.nb_pdt)]))
         lp.solve()
         #lp.solve(pulp.PULP_CBC_CMD(msg=True, keepFiles=True))
