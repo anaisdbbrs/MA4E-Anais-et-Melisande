@@ -19,7 +19,7 @@ class DataCenterAgent:
         hdc = {}
         hr = {}
         alpha={}
-        p_vente = 10
+        p_vente = state['hotwater_price_prevision']
 
         COP_HP = self.env.COP_HP
         EER = self.env.EER
@@ -46,7 +46,7 @@ class DataCenterAgent:
             const_name = "hdc<=max_transfert" + str(t)
             lp+= hdc[t] <= max_transfert, const_name
 
-        lp.setObjective(pulp.lpSum([(lnf[t]+lhp[t])*manager_signal[t]-hdc[t]*p_vente for t in range (self.nb_pdt) ]))
+        lp.setObjective(pulp.lpSum([(lnf[t]+lhp[t])*manager_signal[t]-hdc[t]*p_vente[t] for t in range (self.nb_pdt) ]))
 
         lp.solve()
 
