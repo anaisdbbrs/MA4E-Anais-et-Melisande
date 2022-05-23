@@ -1,19 +1,23 @@
+import os
 import copy
 from collections import defaultdict
 
 import numpy as np
 import datetime
+
+import pandas as pd
 import tqdm
 
-from microgrid.agents.charging_station_agent import ChargingStationAgent
-from microgrid.agents.data_center_agent import DataCenterAgent
-from microgrid.agents.industrial_agent import IndustrialAgent
-from microgrid.agents.solar_farm_agent import SolarFarmAgent
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from matplotlib import pyplot as plt
+from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
+from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
+    calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
+    get_best_team_per_region, get_improvement_traj
+from config import get_configs
 
 
 class Manager:
@@ -183,6 +187,103 @@ class Manager:
         plt.show()
 
 
+    def generate_load_profile(self, mg_team_name='champions'):
+        iter_idx = 1
+        dates = list(sorted(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
+        agents = list(filter(lambda x: not x.startswith('__'), self.data_bank[dates[0]].keys()))
+        pv_prof = [self.data_bank[date]['ferme']['state']['pv_prevision'][0] for date in dates]
+        load_profiles = {mg_team_name:
+                             {iter_idx: {agent: np.array([self.data_bank[date][agent]['consumption'][0] for date in dates])
+                                         for agent in agents
+                                         }
+                              }
+                         }
+        return load_profiles, dates, pv_prof
+
+    def generate_summary_ppt(self, load_profiles, dates, pv_prof):
+        # update dict. to fit with the multiple scenarios case
+        fixed_scenario = (1, 1, "grand_nord", 1)
+        load_profiles = set_to_multiple_scenarios_format(dict_wo_scenarios=load_profiles, fixed_scenario=fixed_scenario)
+
+        # calculate microgrid profile, max power and collective metrics
+        contracted_p_tariffs = {6: 123.6, 9: 151.32, 12: 177.24, 15: 201.36,
+                                18: 223.68, 24: 274.68, 30: 299.52, 36: 337.56}
+
+        # calculate per-actor bill
+        n_t = len(dates)
+        # TODO: update signal from run
+        signal = np.random.rand(n_t)
+        purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
+        sale_price = 0.05 + 0.1 * np.random.rand(n_t)
+
+        delta_t_s = self.delta_t.total_seconds()
+        per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
+                                               sale_price=sale_price, mg_price_signal=signal, delta_t_s=delta_t_s)
+
+        microgrid_prof, microgrid_pmax, collective_metrics = \
+            calc_microgrid_collective_metrics(load_profiles=load_profiles, contracted_p_tariffs=contracted_p_tariffs,
+                                              emission_rates=50 * np.ones(n_t), delta_t_s=delta_t_s)
+
+        # get external (real) bills
+        per_actor_bills_external = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                         last_level_selected_keys=["external"])
+        per_actor_bills_external = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_external,
+                                                                        last_key="external")
+        # and the internal ones, used for coord. into the microgrid
+        per_actor_bills_internal = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                         last_level_selected_keys=["internal"])
+        per_actor_bills_internal = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_internal,
+                                                                        last_key="internal")
+
+        # calculate cost, autonomy tradeoff
+        aggreg_operations = {"cost": sum, "autonomy_score": np.mean}
+        cost_autonomy_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
+                                                                     collective_metrics=collective_metrics,
+                                                                     metric_1="cost",
+                                                                     metric_2="autonomy_score",
+                                                                     aggreg_operations=aggreg_operations)
+
+        # calculate cost, CO2 emissions tradeoff
+        aggreg_operations = {"cost": sum, "co2_emis": np.mean}
+        cost_co2emis_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
+                                                                    collective_metrics=collective_metrics,
+                                                                    metric_1="cost",
+                                                                    metric_2="co2_emis",
+                                                                    aggreg_operations=aggreg_operations)
+
+        # Get best team per region
+        coll_metrics_weights = {"pmax_cost": 1 / 365, "autonomy_score": 1,
+                                "mg_transfo_aging": 0, "n_disj": 0, "co2_emis": 1}
+        team_scores, best_teams_per_region, coll_metrics_names = \
+            get_best_team_per_region(per_actor_bills=per_actor_bills_external, collective_metrics=collective_metrics,
+                                     coll_metrics_weights=coll_metrics_weights)
+
+        current_dir = os.getcwd()
+        result_dir = os.path.join(current_dir, "run_synthesis")
+        date_of_run = datetime.datetime.now()
+        idx_run = 1
+        coord_method = "price_decomposition"
+        regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
+
+        ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
+                                     optim_period=pd.date_range(dates[0], dates[-1], freq=f"{int(delta_t_s)}s"),
+                                     coord_method=coord_method, regions_map_file=regions_map_file)
+
+        # get "improvement trajectory"
+        list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \
+                             for elt in os.listdir(os.path.join(current_dir, "run_synthesis")) \
+                             if (os.path.isdir(elt) and elt.startswith("run_"))]
+        scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
+                                           list(team_scores))
+
+        ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
+                                                microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
+                                                per_actor_bills_internal=per_actor_bills_internal,
+                                                cost_autonomy_tradeoff=cost_autonomy_tradeoff,
+                                                cost_co2emis_tradeoff=cost_co2emis_tradeoff, team_scores=team_scores,
+                                                best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
+
+
 class MyManager(Manager):
     def __init__(self, *args, **kwargs):
         Manager.__init__(self, *args, **kwargs)
@@ -216,67 +317,38 @@ class MyManager(Manager):
 
 if __name__ == "__main__":
     delta_t = datetime.timedelta(minutes=30)
-    time_horizon = datetime.timedelta(days=1) # taille de l'horizon glissant
+    time_horizon = datetime.timedelta(days=1)  # taille de l'horizon glissant
     N = time_horizon // delta_t
-    solar_farm_config = {
-        'battery': {
-            'capacity': 30,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'pv': {
-            'surface': 100,
-            'location': "enpc",  # or (lat, long) in float
-            'tilt': 30,  # in degree
-            'azimuth': 180,  # in degree from North
-            'tracking': None,  # None, 'horizontal', 'dual'
+
+    seed = 1234
+    configs = get_configs(seed)
+
+    import importlib
+    load_profiles = {}
+    dates = None
+    pv_prof = None
+
+    #teams = ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']
+    teams = ['pir']
+    for team in teams:
+        modSF = importlib.import_module(f'microgrid.agents.solar_farm_agent')
+        modCS = importlib.import_module(f'microgrid.agents.charging_station_agent')
+        modI = importlib.import_module(f'microgrid.agents.industrial_agent')
+        modDC = importlib.import_module(f'microgrid.agents.data_center_agent')
+        agents = {
+            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N)),
+            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N)),
+            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=configs['industrial_config'], nb_pdt=N)),
+            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=configs['data_center_config'], nb_pdt=N)),
         }
-    }
-    station_config = {
-        'pmax': 40,
-        'evs': [
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-        ]
-    }
-    industrial_config = {
-        'battery': {
-            'capacity': 60,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'building': {
-            'site': 1,
-        }
-    }
-    data_center_config = {
-        'scenario': 1,
-    }
-    agents = {
-        'ferme': SolarFarmAgent(SolarFarmEnv(solar_farm_config=solar_farm_config, nb_pdt=N)),
-        'evs': ChargingStationAgent(ChargingStationEnv(station_config=station_config, nb_pdt=N)),
-        'industrie': IndustrialAgent(IndustrialEnv(industrial_config=industrial_config, nb_pdt=N)),
-        'datacenter': DataCenterAgent(DataCenterEnv(data_center_config=data_center_config, nb_pdt=N)),
-    }
-    manager = MyManager(agents,
-                        delta_t=delta_t,
-                        horizon=time_horizon,
-                        simulation_horizon=datetime.timedelta(hours=12), # durée de la glissade
-                        max_iterations=10, # nombre d'iterations de convergence des prix
-                        )
-    manager.run()
-    manager.plots()
+        manager = MyManager(agents,
+                            delta_t=delta_t,
+                            horizon=time_horizon,
+                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
+                            max_iterations=10, # nombre d'iterations de convergence des prix
+                            )
+        manager.run()
+        #manager.plots()
+        ld, dates, pv_prof = manager.generate_load_profile(team)
+        load_profiles.update(ld)
+    manager.generate_summary_ppt(load_profiles, dates, pv_prof)

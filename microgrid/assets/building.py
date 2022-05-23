@@ -16,7 +16,7 @@ class Building:
         self.data = pd.read_csv(os.path.join(os.path.dirname(__file__), f'scenarios/industrial/data.csv'), delimiter=';')
 
     def reset(self):
-        self.scenario = randint(1, 30)
+        pass # self.scenario = randint(1, 30)
 
     def get_power(self, when: datetime.datetime, start: datetime.datetime):
         pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30) + 1

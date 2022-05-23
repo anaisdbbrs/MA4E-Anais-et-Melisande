@@ -34,7 +34,7 @@ class ChargingStationEnv(gym.Env):
         )
         low = np.array([[ev.battery.pmin for ev in self.evs] for _ in range(nb_pdt)]).transpose()
         high = np.array([[ev.battery.pmax for ev in self.evs] for _ in range(nb_pdt)]).transpose()
-        self.action_space = spaces.Box(low=low, high=high, shape=(self.nb_evs, nb_pdt))
+        self.action_space = spaces.Box(low=low, high=high, shape=(self.nb_evs, nb_pdt), dtype=np.float64)
         self.now = None
         self.delta_t = None
         self.n_coord_step = None

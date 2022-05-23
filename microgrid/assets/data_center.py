@@ -31,7 +31,7 @@ class DataCenter:
         self.prices = pd.read_csv(os.path.join(os.path.dirname(__file__), f'scenarios/data_center/hotwater_prices.csv'), delimiter=';')
 
     def reset(self):
-        self.scenario = randint(1, 10)
+        pass #self.scenario = randint(1, 10)
 
     def get_power(self, when: datetime.datetime, start: datetime.datetime):
         pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30) + 1
