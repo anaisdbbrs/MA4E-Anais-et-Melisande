@@ -38,7 +38,7 @@ class ChargingStationAgent:
         diff = []
         for k in range(self.env.nb_evs):
             print(plugged_prevision_diff[k])
-            diff.append([0] + np.diff(plugged_prevision_diff[k]).tolist())
+            diff.append(np.diff(plugged_prevision_diff[k]).tolist() + [0])
 
 
             #Initialisation de IS_PLUGGED
@@ -47,19 +47,19 @@ class ChargingStationAgent:
             else:
                 IS_PLUGGED = False
 
+            #Initialisation de NEXT_IS_PLUGGED
+            if plugged_prevision[k][1] == 1:
+                NEXT_IS_PLUGGED = True
+            else:
+                NEXT_IS_PLUGGED = False
+
+
         for k in range(self.env.nb_evs):
             tdep = None
-            tarr = None
+            tarrmoins1 = None
             soc_ = soc[k]
             is_gone = True
             for t in (range(self.nb_pdt)):
-                old_is_plugged = IS_PLUGGED
-
-                if diff[k][t] == 1:
-                    IS_PLUGGED = True
-                elif diff[k][t] == -1 :
-                    IS_PLUGGED = False
-
 
                 # Definition des variables
                 var_name = "l_charge" + str(t) + str(k)
@@ -94,7 +94,8 @@ class ChargingStationAgent:
                 const_name = "ldecharge>=-pmax(1-alpha)" + str(t) + str(k)
                 lp += l_decharge[k][t] >= -self.env.evs[k].battery.pmax * (1 - alpha[k][t]), const_name
 
-                if old_is_plugged != IS_PLUGGED and not IS_PLUGGED and is_gone :
+                # SI Départ
+                if NEXT_IS_PLUGGED != IS_PLUGGED and IS_PLUGGED and is_gone :
                     tdep = t
                     tdep_dico[k] = tdep
                     const_name = "charge_depart_25%" + str(k)
@@ -102,15 +103,26 @@ class ChargingStationAgent:
                     soc_tdep = soc_
                     is_gone = False
 
-                if old_is_plugged != IS_PLUGGED and IS_PLUGGED:
+                # SI arrivée
+                if NEXT_IS_PLUGGED != IS_PLUGGED and not IS_PLUGGED:
                     if tdep is not None :
-                        tarr = t
-                        tarr_dico[k] = tarr
+                        tarrmoins1 = t
+                        tarr_dico[k] = tarrmoins1 +1
                         const_name = "retourdelavoiture" + str(k) + str(t)
                         lp += soc_ == soc_tdep - 4, const_name
                     else:  # Cas particulier, y en a t'il d'autres
                         const_name = "retourdelavoiture" + str(k) + str(t)
                         lp += soc_ == soc - 4, const_name
+
+                #Calcul du NEXT_IS_PLUGGED
+                IS_PLUGGED = NEXT_IS_PLUGGED
+                if t<self.nb_pdt-1:
+                    if diff[k][t+1] == 1:
+                        NEXT_IS_PLUGGED = True
+                    elif diff[k][t+1] == -1 :
+                        NEXT_IS_PLUGGED = False
+
+
 
 
         for t in (range(self.nb_pdt)):
