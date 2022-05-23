@@ -50,6 +50,11 @@ class DataCenterAgent:
 
         lp.solve()
 
+        L= []
+        for t in range (self.nb_pdt):
+            L.append(hdc[t].value())
+        print(L)
+
         return np.array([alpha[t].value() for t in range(self.nb_pdt)])
 
 
