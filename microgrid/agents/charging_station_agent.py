@@ -30,8 +30,8 @@ class ChargingStationAgent:
         alpha = defaultdict(dict)
         a = defaultdict(dict)
         ## Recherche des temps de départ et d'arrivée
-        tdep = {}
-        tarr = {}
+        tdep_dico = {}
+        tarr_dico = {}
 
         plugged_prevision_diff = plugged_prevision.copy()
 
@@ -46,13 +46,12 @@ class ChargingStationAgent:
                 IS_PLUGGED = True
             else:
                 IS_PLUGGED = False
-        print(tdep)
-        print(tarr)
 
         for k in range(self.env.nb_evs):
             tdep = None
             tarr = None
             soc_ = soc[k]
+            is_gone = True
             for t in (range(self.nb_pdt)):
                 old_is_plugged = IS_PLUGGED
 
@@ -95,24 +94,23 @@ class ChargingStationAgent:
                 const_name = "ldecharge>=-pmax(1-alpha)" + str(t) + str(k)
                 lp += l_decharge[k][t] >= -self.env.evs[k].battery.pmax * (1 - alpha[k][t]), const_name
 
-                is_gone = True
-
                 if old_is_plugged != IS_PLUGGED and not IS_PLUGGED and is_gone :
                     tdep = t
-                    const_name = "charge_depart-25%" + str(k)
-                    lp += 0.25 * self.env.evs[k].battery.pmax <= l_charge[k][tdep] + l_decharge[k][tdep], const_name
+                    tdep_dico[k] = tdep
+                    const_name = "charge_depart_25%" + str(k)
+                    lp += 0.25 * self.env.evs[k].battery.capacity <= soc_, const_name
                     soc_tdep = soc_
                     is_gone = False
 
                 if old_is_plugged != IS_PLUGGED and IS_PLUGGED:
                     if tdep is not None :
                         tarr = t
-                        const_name = "retourdelavoiture" + str(k)
+                        tarr_dico[k] = tarr
+                        const_name = "retourdelavoiture" + str(k) + str(t)
                         lp += soc_ == soc_tdep - 4, const_name
-                    else:  # Cas particulier, y en a t'il d'autres?
-                        if tarr is not None:
-                            const_name = "retourdelavoiture" + str(k)
-                            lp += soc_ == soc - 4, const_name
+                    else:  # Cas particulier, y en a t'il d'autres
+                        const_name = "retourdelavoiture" + str(k) + str(t)
+                        lp += soc_ == soc - 4, const_name
 
 
         for t in (range(self.nb_pdt)):
@@ -136,6 +134,36 @@ class ChargingStationAgent:
         for k in range(self.env.nb_evs):
             for t in range(self.nb_pdt):
                 results[k][t] = l_charge[k][t].value() + l_decharge[k][t].value()
+
+        '''liste_soc = np.zeros((self.env.nb_evs,self.nb_pdt))
+        for k in range(self.env.nb_evs):
+            liste_soc[k][0] = state.get("soc")[k]
+        for k in range(self.env.nb_evs):
+            for t in range(1,self.nb_pdt):
+                liste_soc[k][t] = liste_soc[k][t-1] + (self.env.evs[k].battery.efficiency * l_charge[k][t].value() + 1 / (self.env.evs[k].battery.efficiency) * l_decharge[k][t].value()) * (self.env.delta_t / H)
+                if k in tarr_dico and t == tarr_dico[k]:
+                    liste_soc[k][t] -= 4
+        print(liste_soc)'''
+
+        print("l_charge")
+        l_chargetab = np.zeros((self.env.nb_evs, self.nb_pdt))
+        for k in range(self.env.nb_evs):
+            for t in range(self.nb_pdt):
+                l_chargetab[k][t] = l_charge[k][t].value()
+        print(l_chargetab)
+
+        print("l_decharge")
+        l_dechargetab = np.zeros((self.env.nb_evs, self.nb_pdt))
+        for k in range(self.env.nb_evs):
+            for t in range(self.nb_pdt):
+                l_dechargetab[k][t] = l_decharge[k][t].value()
+        print(l_dechargetab)
+
+
+
+
+
+        lp.writeLP("myoptipb.lp")
 
         return np.array(results)
 
