@@ -286,7 +286,7 @@ class Manager:
                              if (os.path.isdir(elt) and elt.startswith("run_"))]
         scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
                                            list(team_scores))
-        pd.DataFrame(signal_dict).to_csv(os.path.join(result_dir, f"lambda_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
+        pd.DataFrame(signal_dict).to_csv(os.path.join(result_dir, f"lambda_{date_of_run.strftime('%Y-%m-%d_%H%M')}.csv"))
         save_load_profiles(load_profiles, "pir", os.path.join(result_dir, f"profilConsos_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
         save_perf_metrics(collective_metrics,per_actor_bills_external,"pir",os.path.join(result_dir, f"PerfMetrics_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
         ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
