@@ -87,15 +87,8 @@ class ChargingStationAgent:
                 #####################################Définition des contraintes###########################################################
 
                 # !!!!!!!!!!!!!!!! OB : je ne vois pas cette contrainte dans votre .lp... bizarre
-                if t == 0:
-                    const_name = "soc_initial" + str(k)
-                    soc_ = soc[k]
-                    lp += a[k][t] == soc[k] + (self.env.evs[k].battery.efficiency * l_charge[k][t]+ 1 / (self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (self.env.delta_t / H), const_name
 
-                    const_name = "lcharge<=pmax*alpha" + str(t) + str(k)
-                    lp += l_charge[k][t] <= self.env.evs[k].battery.pmax * alpha[k][t], const_name
-                    const_name = "ldecharge>=-pmax(1-alpha)" + str(t) + str(k)
-                    lp += l_decharge[k][t] >= -self.env.evs[k].battery.pmax * (1 - alpha[k][t]), const_name
+
 
 
 
@@ -110,7 +103,7 @@ class ChargingStationAgent:
                     const_name = "charge_depart_25%" + str(k) + str(t)
                     #lp += 0.25 * self.env.evs[k].battery.capacity <= soc_, const_name
                     lp += 0.25 * self.env.evs[k].battery.capacity <= a[k][t], const_name
-                    soc_tdep = soc_  # garder le soc de départ en mémoire (en fait, c'est déjà géré par la dynamique: faire appel à a[k][tdep]
+                    #soc_tdep = soc_  # garder le soc de départ en mémoire (en fait, c'est déjà géré par la dynamique: faire appel à a[k][tdep]
                     # ou encore à a[k][t] ligne 139 pour la contrainte "retour de la voiture"
 
                     is_gone = True
@@ -137,7 +130,7 @@ class ChargingStationAgent:
 
                         const_name = "retourdelavoiture" + str(k) + str(t)
                         # lp += soc_ == soc_tdep - 4, const_name, ligne en dessous c'est mieux?
-                        soc_ = soc_tdep - 4
+                        #soc_ = soc_tdep - 4
                         lp += a[k][t] == a[k][tdepmoins1] - 4, const_name
 
                     #arrivée avant départ
@@ -149,17 +142,23 @@ class ChargingStationAgent:
 
 
                 # Au pas de temps t, l'ev k est branché
-                if IS_PLUGGED and t>0:
+                if IS_PLUGGED :
+                    if t == 0:
+                        const_name = "soc_initial" + str(k)
+                        #soc_ = soc[k]
+                        lp += a[k][t] == soc[k] + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
+                            self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (self.env.delta_t / H), const_name
+                    if t>0:
+                        # MAJ soc_ (scalaire), stockage dans a[k][t]
+                        const_name = "majsoc" + str(t) + str(k)
+                        lp += a[k][t] == a[k][t - 1] + (self.env.evs[k].battery.efficiency * l_charge[k][t] + 1 / (
+                            self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (self.env.delta_t / H), const_name
+
                     # Charge ou bien décharge...
                     const_name = "lcharge<=pmax*alpha" + str(t) + str(k)
                     lp += l_charge[k][t] <= self.env.evs[k].battery.pmax * alpha[k][t], const_name
                     const_name = "ldecharge>=-pmax(1-alpha)" + str(t) + str(k)
                     lp += l_decharge[k][t]>= -self.env.evs[k].battery.pmax * (1 - alpha[k][t]), const_name
-
-
-                    # MAJ soc_ (scalaire), stockage dans a[k][t]
-                    const_name = "majsoc" + str(t) + str(k)
-                    lp += a[k][t] == a[k][t-1] + (self.env.evs[k].battery.efficiency * l_charge[k][t]+ 1 / (self.env.evs[k].battery.efficiency) * l_decharge[k][t]) * (self.env.delta_t / H), const_name
 
                     # Contrainte état de charge de la batterie
                     const_name = "a<=C" + str(t) + str(k)
@@ -169,15 +168,20 @@ class ChargingStationAgent:
 
                 # Ou bien au pas de temps t, l'ev k est débranché ( = parti), donc charge et décharge nulles et le temps suivant n'est pas une arrivée
                 # si le temps suivant est une arrivée, la MAJ de soc_ est différente: voir "on détecte une ARRIVEE"
-                if not IS_PLUGGED and not NEXT_IS_PLUGGED and t > 0:
+                if not IS_PLUGGED and not NEXT_IS_PLUGGED:
                     const_name = "lcharge=0" + str(t) + str(k)
                     lp += l_charge[k][t] == 0, const_name
                     const_name = "ldecharge=0" + str(t) + str(k)
                     lp += l_decharge[k][t] == 0, const_name
 
+                    if t==0:
+                        const_name = "socinitial" + str(t) + str(k)
+                        lp += a[k][t] == soc[k], const_name
+                    if t>0:
                     # dynamique de la batterie
-                    const_name = "socsipasbranche" + str(t) + str(k)
-                    lp += a[k][t] == a[k][t-1], const_name
+                        const_name = "socsipasbranche" + str(t) + str(k)
+                        lp += a[k][t] == a[k][t-1], const_name
+
 
                 # Calcul du NEXT_IS_PLUGGED
                 # !!!!!!!!!!!!!!!!! OB : ici je pense qu'il y a une erreur d'indice car de base np.diff donne comme élément [0] le statut pour t=1
@@ -214,11 +218,12 @@ class ChargingStationAgent:
         for k in range(nb_evs):
             for t in range(self.nb_pdt):
                 results[k][t] = l_charge[k][t].value() + l_decharge[k][t].value()
+        results = results.round()
 
         liste_soc = np.zeros((nb_evs, self.nb_pdt))
         for k in range(nb_evs):
             # liste_soc[k][0] = state.get("soc")[k]
-            liste_soc[k][0] = 5
+            liste_soc[k][0] = soc[k] + (self.env.evs[k].battery.efficiency * l_charge[k][0].value()+ 1/ (self.env.evs[k].battery.efficiency) * l_decharge[k][0].value()) * (self.env.delta_t / H)
 
         for k in range(nb_evs):
             for t in range(1, self.nb_pdt):
@@ -257,7 +262,7 @@ class ChargingStationAgent:
             if k not in tarr_dico_date:
                 tarr_dico_date[k] = 0
 
-        '''i_ev = 0
+        i_ev = 0
         t_ev_dep = np.array(list(tdep_dico_date.values()))
         t_ev_arr = np.array(list(tarr_dico_date.values()))
 
@@ -269,13 +274,13 @@ class ChargingStationAgent:
             detailed_infeas_list,
         ) = check_charging_station_feasibility(
             results,
-            1,
-            0,
+            2,
+            2,
             t_ev_dep,
             t_ev_arr,
-            {"normal": self.env.evs[0].battery.pmax, "fast": 22},
-            40 * np.ones(1),
-            10 * np.ones(1),
+            {"normal": 22, "fast": 3},
+            40 * np.ones(4),
+            10 * np.ones(4),
             self.env.evs[0].battery.efficiency,
             self.env.evs[0].battery.efficiency,
             48,
@@ -284,7 +289,7 @@ class ChargingStationAgent:
             40,
         )
 
-        print(detailed_infeas_list)'''
+        print(detailed_infeas_list)
         return np.array(results)
 
 
