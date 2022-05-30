@@ -347,7 +347,7 @@ if __name__ == "__main__":
         manager = MyManager(agents,
                             delta_t=delta_t,
                             horizon=time_horizon,
-                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
+                            simulation_horizon=datetime.timedelta(days=3), # durée de la glissade
                             max_iterations=10, # nombre d'iterations de convergence des prix
                             )
         manager.run()
