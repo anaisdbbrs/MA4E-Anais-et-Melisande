@@ -189,6 +189,37 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
     
     return microgrid_prof, microgrid_pmax, collective_metrics
 
+def set_on_off_peak_fare_vector(dates: list[datetime.datetime], off_peak_start_hour: int=22, off_peak_end_hour: int=6,
+                                on_peak_price: float=0.1853, off_peak_price: float=0.1353) -> np.array:
+    """
+    Set an on-off peak fare vector based on a list of dates and on parameters characterizing this fare
+
+    Args:
+        dates:
+        off_peak_start_hour:
+        off_peak_end_hour:
+        on_peak_price:
+        off_peak_price:
+
+    Returns:
+
+    """
+
+    # initialize with on peak price value
+    on_off_peak_fares = on_peak_price * np.ones(len(dates))
+
+    # fullfill with off-peak fare value for corresponding slots
+    for i_date in range(len(dates)):
+        if off_peak_start_hour > off_peak_end_hour:
+            if dates[i_date].hour >= off_peak_start_hour or dates[i_date].hour <= off_peak_end_hour:
+                on_off_peak_fares[i_date] = off_peak_price
+        else:
+            if off_peak_start_hour <= dates[i_date].hour <= off_peak_end_hour:
+                on_off_peak_fares[i_date] = off_peak_price
+
+    return on_off_peak_fares
+
+
 
 def calculate_bill(load_profile: np.ndarray, purchase_price: np.ndarray,
                    sale_price: np.ndarray, delta_t_s: int) -> float:

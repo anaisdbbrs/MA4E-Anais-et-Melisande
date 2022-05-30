@@ -1,3 +1,4 @@
+from cProfile import label
 import logging
 import os
 import copy
@@ -17,7 +18,7 @@ from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
 from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
-    get_best_team_per_region, get_improvement_traj
+    get_best_team_per_region, get_improvement_traj,set_on_off_peak_fare_vector
 from config import get_configs
 from write import save_load_profiles,save_perf_metrics
 
@@ -175,16 +176,20 @@ class Manager:
         plt.figure()
         names = self.agents.keys()
         T = sorted(list(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
-        consumption = [
-            sum([self.data_bank[t][n]['consumption'][0] for n in names]) for t in T
-        ]
-        plt.plot(T, consumption, label='microgrid consumption')
-        for name in names:
-            consumption = [
-                [self.data_bank[t][name]['consumption'][0]] for t in T
-            ]
-            reward = sum(self.data_bank[t][name]['reward'] for t in T)
-            plt.plot(T, consumption, label=f'{name} (reward: {reward:.2f})')
+        # consumption = [
+        #     sum([self.data_bank[t][n]['consumption'][0] for n in names]) for t in T
+        # ]
+        # plt.plot(T, consumption, label='microgrid consumption')
+        # for name in names:
+        #     consumption = [
+        #         [self.data_bank[t][name]['consumption'][0]] for t in T
+        #     ]
+        #     reward = sum(self.data_bank[t][name]['reward'] for t in T)
+        #     plt.plot(T, consumption, label=f'{name} (reward: {reward:.2f})')
+        prix=self.data_bank[T[0]]["ferme"]["state"]["manager_signal"]
+        plt.plot(range(len(prix)),prix,label="prix")
+        pv=self.data_bank[T[0]]["ferme"]["state"]["pv_prevision"]
+        plt.plot(range(len(pv)),pv,label="pv")
         plt.legend()
         plt.show()
 
@@ -214,9 +219,13 @@ class Manager:
         # calculate per-actor bill
         n_t = len(dates)
         # TODO: update signal from run
-        signal = np.random.rand(n_t)
-        purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
-        sale_price = 0.05 + 0.1 * np.random.rand(n_t)
+        T = sorted(list(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
+        purchase_price = set_on_off_peak_fare_vector(dates=dates)
+        sale_price = np.zeros(n_t)
+        signal = [self.data_bank[t]["ferme"]["state"]["manager_signal"] for t in T]
+        signal_dict= {"time":T,"signal":signal}
+        
+
 
         delta_t_s = self.delta_t.total_seconds()
         per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
@@ -277,6 +286,7 @@ class Manager:
                              if (os.path.isdir(elt) and elt.startswith("run_"))]
         scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
                                            list(team_scores))
+        pd.DataFrame(signal_dict).to_csv(os.path.join(result_dir, f"lambda_{date_of_run.strftime('%Y-%m-%d_%H%M')}.csv"))
         save_load_profiles(load_profiles, "pir", os.path.join(result_dir, f"profilConsos_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
         save_perf_metrics(collective_metrics,per_actor_bills_external,"pir",os.path.join(result_dir, f"PerfMetrics_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
         ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
@@ -303,8 +313,16 @@ class MyManager(Manager):
         return res
 
     def update_signal(self, signal, agents_data):
+        # TODO: update signal based on previous signal and agents_data
         current_consumptions = np.array([a['consumption'] for a in agents_data.values()]).sum(axis=0).squeeze()
-        return signal + current_consumptions * 0.1
+        lpv = agents_data["ferme"]["state"]["pv_prevision"]
+        A = np.zeros_like(lpv)
+        for i in range(len(lpv)):
+            if lpv[i]<self.eps:
+                A[i]=20
+            else:
+                A[i]=min(current_consumptions[i]/(1+lpv[i]),20)
+        return A
 
     def update_reward(self, now: datetime.datetime, agents_data: dict):
         total_consumption = sum([a['consumption'][0] for a in agents_data.values()])
@@ -347,11 +365,11 @@ if __name__ == "__main__":
         manager = MyManager(agents,
                             delta_t=delta_t,
                             horizon=time_horizon,
-                            simulation_horizon=datetime.timedelta(days=3), # durée de la glissade
+                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
                             max_iterations=10, # nombre d'iterations de convergence des prix
                             )
         manager.run()
-        #manager.plots()
+        manager.plots()
         ld, dates, pv_prof = manager.generate_load_profile(team)
         load_profiles.update(ld)
     manager.generate_summary_ppt(load_profiles, dates, pv_prof)
