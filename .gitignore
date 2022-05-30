@@ -131,3 +131,5 @@ dmypy.json
 
 # Run results
 /microgrid/run*
+*.lp
+.DS_STORE
