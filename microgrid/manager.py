@@ -155,7 +155,7 @@ class Manager:
     def update_signal(self, signal, agents_data):
         # TODO: update signal based on previous signal and agents_data
         current_consumptions = np.array([a['consumption'] for a in agents_data.values()]).sum(axis=0).squeeze()
-        lpv = agents_data["ferme"]["state"]["pv_previsions"]
+        lpv = agents_data["ferme"]["state"]["pv_prevision"]
         return (current_consumptions-lpv)/lpv
 
 
