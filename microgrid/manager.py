@@ -1,3 +1,4 @@
+import logging
 import os
 import copy
 from collections import defaultdict
@@ -18,6 +19,7 @@ from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
     get_best_team_per_region, get_improvement_traj
 from config import get_configs
+from write import save_load_profiles,save_perf_metrics
 
 
 class Manager:
@@ -153,7 +155,7 @@ class Manager:
     def update_signal(self, signal, agents_data):
         # TODO: update signal based on previous signal and agents_data
         current_consumptions = np.array([a['consumption'] for a in agents_data.values()]).sum(axis=0).squeeze()
-        lpv = agents_data["ferme"]["state"]["pv_previsions"]
+        lpv = agents_data["ferme"]["state"]["pv_prevision"]
         return (current_consumptions-lpv)/lpv
 
 
@@ -275,7 +277,8 @@ class Manager:
                              if (os.path.isdir(elt) and elt.startswith("run_"))]
         scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
                                            list(team_scores))
-
+        save_load_profiles(load_profiles, "pir", os.path.join(result_dir, f"profilConsos_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
+        save_perf_metrics(collective_metrics,per_actor_bills_external,"pir",os.path.join(result_dir, f"PerfMetrics_{date_of_run.strftime('%Y-%m-%d_%H%M')}"))
         ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
                                                 microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
                                                 per_actor_bills_internal=per_actor_bills_internal,
@@ -344,7 +347,7 @@ if __name__ == "__main__":
         manager = MyManager(agents,
                             delta_t=delta_t,
                             horizon=time_horizon,
-                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
+                            simulation_horizon=datetime.timedelta(days=3), # durée de la glissade
                             max_iterations=10, # nombre d'iterations de convergence des prix
                             )
         manager.run()
