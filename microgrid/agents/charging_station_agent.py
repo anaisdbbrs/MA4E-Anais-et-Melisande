@@ -218,9 +218,9 @@ class ChargingStationAgent:
                 l_dechargetab[k][t] = l_decharge[k][t].value()
         print(l_dechargetab)
 
-        print(tdep_dico )
-        print(tarr_dico)
-        print(results.shape)
+        print(f"Dict départ {tdep_dico}")
+        print(f"Dict arrivée : {tarr_dico}")
+        print(f"Shape {results.shape}")
 
         for k in range(nb_evs):
             if k not in tdep_dico:
